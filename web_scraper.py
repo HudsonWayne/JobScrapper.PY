@@ -1,4 +1,4 @@
-h# web_scraper.py
+
 
 import requests
 from bs4 import BeautifulSoup
@@ -8,13 +8,13 @@ import time
 import logging
 from datetime import datetime
 
-# Setup logging
+
 logging.basicConfig(filename='log.txt', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Target URL
+
 URL = "https://vacancymail.co.zw/jobs/"
 
-# Scraping function
+
 def scrape_jobs():
     try:
         logging.info("Started scraping")
@@ -34,7 +34,7 @@ def scrape_jobs():
             expiry = parent.find('span', class_='text-danger').text.strip() if parent.find('span', class_='text-danger') else "N/A"
             link = "https://vacancymail.co.zw" + card.find('a')['href']
 
-            # Get job description from the job page
+            
             job_response = requests.get(link)
             job_soup = BeautifulSoup(job_response.text, 'html.parser')
             desc_section = job_soup.find('div', class_='card-body')
@@ -51,16 +51,15 @@ def scrape_jobs():
         df = pd.DataFrame(data)
         df.drop_duplicates(inplace=True)
 
-        # Save as CSV
+        
         df.to_csv("scraped_data.csv", index=False)
         logging.info("Scraping successful. Data saved to scraped_data.csv")
 
     except Exception as e:
         logging.error(f"Scraping failed: {e}")
 
-# Schedule the job
 def schedule_scraping():
-    schedule.every().day.at("10:00").do(scrape_jobs)  # adjust time as needed
+    schedule.every().day.at("10:00").do(scrape_jobs)  
 
     print("Scheduled scraping every day at 10:00AM. Press Ctrl+C to exit.")
     while True:
