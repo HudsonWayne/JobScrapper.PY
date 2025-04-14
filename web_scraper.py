@@ -1,78 +1,99 @@
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+import os
+import datetime
+import logging
 import schedule
 import time
-import logging
-from datetime import datetime
-import os
 
-# Logging setup
-logging.basicConfig(
-    filename='log.txt',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+
+logging.basicConfig(filename='log.txt', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 URL = "https://vacancymail.co.zw/jobs/"
+CSV_FILE = "scraped_data.csv"
 
 def scrape_jobs():
     try:
-        logging.info("Started scraping")
+        logging.info("Started scraping...")
         response = requests.get(URL)
-        response.raise_for_status()
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to fetch page. Status code: {response.status_code}")
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        job_cards = soup.find_all('div', class_='job-title', limit=10)
 
-        data = []
+        
+        with open("page_source.html", "w", encoding='utf-8') as f:
+            f.write(soup.prettify())
 
+        job_cards = soup.find_all('a', class_='job-listing')
+
+        if not job_cards:
+            logging.error("No job cards found.")
+            return
+
+        jobs = []
         for card in job_cards:
-            title = card.text.strip()
-            parent = card.find_parent('div', class_='card-body')
-            company = parent.find('h6').text.strip() if parent.find('h6') else "N/A"
-            location = parent.find('span', class_='location').text.strip() if parent.find('span', class_='location') else "N/A"
-            expiry = parent.find('span', class_='text-danger').text.strip() if parent.find('span', class_='text-danger') else "N/A"
-            link = "https://vacancymail.co.zw" + card.find('a')['href']
+            title_tag = card.find('h3', class_='job-listing-title')
+            title = title_tag.text.strip() if title_tag else "N/A"
 
-            # Get job description from job detail page
-            job_response = requests.get(link)
-            job_soup = BeautifulSoup(job_response.text, 'html.parser')
-            desc_section = job_soup.find('div', class_='card-body')
-            description = desc_section.text.strip() if desc_section else "N/A"
+            company_tag = card.find('h4', class_='job-listing-company')
+            company = company_tag.text.strip() if company_tag else "N/A"
 
-            data.append({
-                'Title': title,
-                'Company': company,
-                'Location': location,
-                'Expiry Date': expiry,
-                'Description': description
+            desc_tag = card.find('p', class_='job-listing-text')
+            description = desc_tag.text.strip() if desc_tag else "N/A"
+
+            footer = card.find('div', class_='job-listing-footer')
+            location = "N/A"
+            expiry = "N/A"
+            job_type = "N/A"
+            salary = "N/A"
+            posted = "N/A"
+
+            if footer:
+                lis = footer.find_all('li')
+                if len(lis) >= 5:
+                    location = lis[0].text.strip()
+                    expiry = lis[1].text.strip()
+                    job_type = lis[2].text.strip()
+                    salary = lis[3].text.strip()
+                    posted = lis[4].text.strip()
+
+            jobs.append({
+                "Title": title,
+                "Company": company,
+                "Description": description,
+                "Location": location,
+                "Expiry": expiry,
+                "Job Type": job_type,
+                "Salary": salary,
+                "Posted": posted,
+                "Scraped Date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
 
-        df = pd.DataFrame(data)
-        df.drop_duplicates(inplace=True)
+        df = pd.DataFrame(jobs)
 
-        csv_file = "scraped_data.csv"
-
-        # Append data or create file if it doesn't exist
-        if os.path.exists(csv_file) and os.path.getsize(csv_file) > 0:
-            existing_df = pd.read_csv(csv_file)
-            combined_df = pd.concat([existing_df, df])
-            combined_df.drop_duplicates(inplace=True)
-            combined_df.to_csv(csv_file, index=False)
+        
+        if not os.path.exists(CSV_FILE) or os.stat(CSV_FILE).st_size == 0:
+            df.to_csv(CSV_FILE, index=False)
+            logging.info("New file created and data saved.")
         else:
-            df.to_csv(csv_file, index=False)
-
-        logging.info("Scraping successful. Data saved to scraped_data.csv")
+            df.to_csv(CSV_FILE, mode='a', header=False, index=False)
+            logging.info("Data appended to existing file.")
 
     except Exception as e:
         logging.error(f"Scraping failed: {e}")
-        print(f"Error: {e}")
+        print(e)
 
-# Scheduler to run every 30 seconds
-if __name__ == "__main__":
+def schedule_scraping():
     schedule.every(30).seconds.do(scrape_jobs)
     print("Scraper is running every 30 seconds... Press Ctrl+C to stop.")
     while True:
         schedule.run_pending()
         time.sleep(1)
+
+if __name__ == "__main__":
+    scrape_jobs()  
+    schedule_scraping()
