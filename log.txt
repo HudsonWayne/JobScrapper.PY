@@ -1,0 +1,2 @@
+2025-04-14 09:26:39,084 - INFO - Started scraping
+2025-04-14 09:26:39,890 - INFO - Scraping successful. Data saved to scraped_data.csv

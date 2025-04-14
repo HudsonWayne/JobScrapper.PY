@@ -1,5 +1,3 @@
-
-
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -7,13 +5,16 @@ import schedule
 import time
 import logging
 from datetime import datetime
+import os
 
-
-logging.basicConfig(filename='log.txt', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+# Logging setup
+logging.basicConfig(
+    filename='log.txt',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 URL = "https://vacancymail.co.zw/jobs/"
-
 
 def scrape_jobs():
     try:
@@ -34,7 +35,7 @@ def scrape_jobs():
             expiry = parent.find('span', class_='text-danger').text.strip() if parent.find('span', class_='text-danger') else "N/A"
             link = "https://vacancymail.co.zw" + card.find('a')['href']
 
-            
+            # Get job description from job detail page
             job_response = requests.get(link)
             job_soup = BeautifulSoup(job_response.text, 'html.parser')
             desc_section = job_soup.find('div', class_='card-body')
@@ -51,22 +52,27 @@ def scrape_jobs():
         df = pd.DataFrame(data)
         df.drop_duplicates(inplace=True)
 
-        
-        df.to_csv("scraped_data.csv", index=False)
+        csv_file = "scraped_data.csv"
+
+        # Append data or create file if it doesn't exist
+        if os.path.exists(csv_file) and os.path.getsize(csv_file) > 0:
+            existing_df = pd.read_csv(csv_file)
+            combined_df = pd.concat([existing_df, df])
+            combined_df.drop_duplicates(inplace=True)
+            combined_df.to_csv(csv_file, index=False)
+        else:
+            df.to_csv(csv_file, index=False)
+
         logging.info("Scraping successful. Data saved to scraped_data.csv")
 
     except Exception as e:
         logging.error(f"Scraping failed: {e}")
+        print(f"Error: {e}")
 
-def schedule_scraping():
-    schedule.every().day.at("10:00").do(scrape_jobs)  
-
-    print("Scheduled scraping every day at 10:00AM. Press Ctrl+C to exit.")
+# Scheduler to run every 30 seconds
+if __name__ == "__main__":
+    schedule.every(30).seconds.do(scrape_jobs)
+    print("Scraper is running every 30 seconds... Press Ctrl+C to stop.")
     while True:
         schedule.run_pending()
         time.sleep(1)
-
-
-if __name__ == "__main__":
-    scrape_jobs()  
-   
